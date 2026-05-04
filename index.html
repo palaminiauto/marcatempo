@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Marcatempo Semplice</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; padding: 20px; max-width: 400px; margin: auto; background-color: #f9f9f9; }
+    .nav { display: flex; gap: 10px; margin-bottom: 30px; }
+    .nav button { flex: 1; padding: 12px; cursor: pointer; border: none; border-radius: 8px; background: #ddd; font-weight: bold; }
+    .nav button.active { background: #333; color: white; }
+    
+    .btn { padding: 20px; font-size: 20px; margin: 10px 0; width: 100%; cursor: pointer; border: none; border-radius: 12px; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+    .btn-inizio { background: #4CAF50; color: white; }
+    .btn-fine { background: #f44336; color: white; }
+    
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+    th, td { border-bottom: 1px solid #eee; padding: 12px 8px; text-align: left; font-size: 14px; }
+    th { background: #f1f1f1; }
+    
+    .hidden { display: none; }
+    #status { text-align: center; margin-top: 15px; font-weight: bold; color: #555; }
+  </style>
+</head>
+<body>
+
+  <!-- Menu di navigazione -->
+  <div class="nav">
+    <button id="btn-tab-timbra" class="active" onclick="showView('timbratura')">Timbra</button>
+    <button id="btn-tab-storico" onclick="showView('storico'); loadStorico()">Storico</button>
+  </div>
+
+  <!-- Schermata 1: Pulsanti -->
+  <div id="timbratura">
+    <button class="btn btn-inizio" onclick="timbra('inizio')">INIZIO</button>
+    <button class="btn btn-fine" onclick="timbra('fine')">FINE</button>
+    <p id="status"></p>
+  </div>
+
+  <!-- Schermata 2: Storico -->
+  <div id="storico" class="hidden">
+    <p id="loading" style="text-align: center;">Caricamento in corso...</p>
+    <table>
+      <thead>
+        <tr><th>Data</th><th>Inizio</th><th>Fine</th><th>Lavoro</th></tr>
+      </thead>
+      <tbody id="tabella-dati"></tbody>
+    </table>
+  </div>
+
+  <script>
+    // INCOLLA QUI IL TUO URL DI GOOGLE APPS SCRIPT
+    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwa5yn3ZU3nT1ECYxPoQuFDqAmPZPW-GAYBhNiK5nlVSCT3sAeQOjpLlT-kcNqHr4QDhg/exec;
+
+    function showView(view) {
+      document.getElementById('timbratura').classList.add('hidden');
+      document.getElementById('storico').classList.add('hidden');
+      document.getElementById('btn-tab-timbra').classList.remove('active');
+      document.getElementById('btn-tab-storico').classList.remove('active');
+      
+      document.getElementById(view).classList.remove('hidden');
+      document.getElementById('btn-tab-' + (view === 'timbratura' ? 'timbra' : 'storico')).classList.add('active');
+    }
+
+    function timbra(tipo) {
+      const lavorazione = prompt("Che lavorazione è?");
+      if (lavorazione === null) return; // Se l'utente clicca Annulla
+
+      const now = new Date();
+      const dataStr = now.toLocaleDateString('it-IT');
+      const oraStr = now.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+
+      if (tipo === 'inizio') {
+        // Salva in memoria l'inizio
+        localStorage.setItem('marcatempo_inizio', JSON.stringify({ data: dataStr, ora: oraStr }));
+        document.getElementById('status').innerText = "🟢 Inizio registrato alle " + oraStr + " per: " + lavorazione;
+      } 
+      else if (tipo === 'fine') {
+        const inizioSalvato = JSON.parse(localStorage.getItem('marcatempo_inizio'));
+        if (!inizioSalvato) {
+          alert("Errore: Non hai cliccato INIZIO prima di cliccare FINE!");
+          return;
+        }
+
+        document.getElementById('status').innerText = "⏳ Salvataggio nel foglio in corso...";
+
+        // Invia tutto a Google Sheets
+        const url = `${SCRIPT_URL}?action=save&data=${encodeURIComponent(inizioSalvato.data)}&oraInizio=${encodeURIComponent(inizioSalvato.ora)}&oraFine=${encodeURIComponent(oraStr)}&lavorazione=${encodeURIComponent(lavorazione)}`;
+
+        fetch(url)
+          .then(response => response.json())
+          .then(data => {
+            document.getElementById('status').innerText = "✅ Lavorazione salvata con successo!";
+            localStorage.removeItem('marcatempo_inizio'); // Pulisce la memoria per la prossima volta
+          })
+          .catch(error => {
+            document.getElementById('status').innerText = "❌ Errore di connessione.";
+          });
+      }
+    }
+
+    function loadStorico() {
+      document.getElementById('loading').style.display = 'block';
+      document.getElementById('tabella-dati').innerHTML = '';
+      
+      fetch(`${SCRIPT_URL}?action=get`)
+        .then(res => res.json())
+        .then(data => {
+          document.getElementById('loading').style.display = 'none';
+          const tbody = document.getElementById('tabella-dati');
+          data.forEach(row => {
+            // row[0] = Data, row[1] = Inizio, row[2] = Fine, row[3] = Lavorazione
+            tbody.innerHTML += `<tr><td>${row[0]}</td><td>${row[1]}</td><td>${row[2]}</td><td>${row[3]}</td></tr>`;
+          });
+        })
+        .catch(error => {
+          document.getElementById('loading').innerText = "Errore nel caricamento dei dati.";
+        });
+    }
+  </script>
+</body>
+</html>
